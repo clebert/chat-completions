@@ -24,15 +24,17 @@ yarn add chat-completions state-guard
 
 ## Usage Example
 
-The following example demonstrates how to import and use the `chatCompletions` state machine to
-interact with the OpenAI Chat Completions API in a Node.js environment:
+The following example demonstrates how to create and use a state machine to interact with the OpenAI
+Chat Completions API in a Node.js environment:
 
 ```js
-import {chatCompletions} from 'chat-completions';
+import {createChatCompletionsStateMachine} from 'chat-completions';
 import {env, stderr, stdout} from 'node:process';
 
-chatCompletions.subscribe(() => {
-  const snapshot = chatCompletions.get();
+const stateMachine = createChatCompletionsStateMachine();
+
+stateMachine.subscribe(() => {
+  const snapshot = stateMachine.get();
 
   switch (snapshot.state) {
     case `isReceiving`: {
@@ -51,43 +53,17 @@ chatCompletions.subscribe(() => {
 
 const apiKey = /** @type {string} */ (env.API_KEY);
 
-chatCompletions.assert(`isInitialized`).actions.send({
+stateMachine.assert(`isInitialized`).actions.send({
   apiKey,
   model: `gpt-4`,
   messages: [{role: `user`, content: `Hello, World!`}],
 });
 ```
 
-## State Machine
+## StateGuard State Machine Implementation
 
 ```ts
-interface IsSending {
-  readonly apiKey: string;
-  readonly model: string;
-  readonly messages: readonly [ChatMessage, ...ChatMessage[]];
-}
-
-interface ChatMessage {
-  readonly role: 'assistant' | 'system' | 'user';
-  readonly content: string;
-}
-
-interface IsReceiving {
-  readonly content: string;
-  readonly contentDelta: string;
-}
-
-interface IsFinished {
-  readonly reason: 'content_filter' | 'length' | 'stop';
-  readonly content: string;
-}
-
-interface IsFailed {
-  readonly error: unknown;
-  readonly content?: string;
-}
-
-const chatCompletions = createStateMachine({
+createStateMachine({
   initialState: `isInitialized`,
   initialValue: undefined,
   transformerMap: {
@@ -120,4 +96,38 @@ const chatCompletions = createStateMachine({
     },
   },
 });
+```
+
+```ts
+interface IsSending {
+  readonly apiKey: string;
+  readonly model: string;
+  readonly messages: readonly [ChatMessage, ...ChatMessage[]];
+}
+
+interface ChatMessage {
+  readonly role: 'assistant' | 'system' | 'user';
+  readonly content: string;
+}
+```
+
+```ts
+interface IsReceiving {
+  readonly content: string;
+  readonly contentDelta: string;
+}
+```
+
+```ts
+interface IsFinished {
+  readonly reason: 'content_filter' | 'length' | 'stop';
+  readonly content: string;
+}
+```
+
+```ts
+interface IsFailed {
+  readonly error: unknown;
+  readonly content?: string;
+}
 ```
