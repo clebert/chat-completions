@@ -10,16 +10,8 @@ and simplifies the process of sending and receiving messages from the Chat Compl
 
 ## Installation
 
-Using npm:
-
 ```sh
 npm install chat-completions state-guard
-```
-
-Using Yarn:
-
-```sh
-yarn add chat-completions state-guard
 ```
 
 ## Usage Example
