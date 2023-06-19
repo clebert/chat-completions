@@ -1,19 +1,11 @@
+import type {ChatCompletionsRequest} from './create-chat-completions-stream.js';
 import type {InferSnapshot} from 'state-guard';
 
 import {createChatCompletionsGenerator} from './create-chat-completions-generator.js';
 import {createChatCompletionsStream} from './create-chat-completions-stream.js';
 import {createStateMachine} from 'state-guard';
 
-export interface IsSending {
-  readonly apiKey: string;
-  readonly model: string;
-  readonly messages: readonly [Message, ...Message[]];
-}
-
-export interface Message {
-  readonly role: 'assistant' | 'system' | 'user';
-  readonly content: string;
-}
+export interface IsSending extends ChatCompletionsRequest {}
 
 export interface IsReceiving {
   readonly content: string;

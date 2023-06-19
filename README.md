@@ -64,10 +64,10 @@ chatCompletions.assert(`isInitialized`).actions.send({
 interface IsSending {
   readonly apiKey: string;
   readonly model: string;
-  readonly messages: readonly [Message, ...Message[]];
+  readonly messages: readonly [ChatMessage, ...ChatMessage[]];
 }
 
-interface Message {
+interface ChatMessage {
   readonly role: 'assistant' | 'system' | 'user';
   readonly content: string;
 }
