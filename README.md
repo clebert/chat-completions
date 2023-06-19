@@ -60,7 +60,7 @@ stateMachine.assert(`isInitialized`).actions.send({
 });
 ```
 
-## StateGuard State Machine Implementation
+## StateGuard State Machine Definition
 
 ```ts
 createStateMachine({
