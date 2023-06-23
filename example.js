@@ -1,10 +1,10 @@
-import {createChatCompletionsStateMachine} from './lib/index.js';
+import {createChatCompletionsMachine} from './lib/index.js';
 import {env, stderr, stdout} from 'node:process';
 
-const stateMachine = createChatCompletionsStateMachine();
+const machine = createChatCompletionsMachine();
 
-stateMachine.subscribe(() => {
-  const snapshot = stateMachine.get();
+machine.subscribe(() => {
+  const snapshot = machine.get();
 
   switch (snapshot.state) {
     case `isReceiving`: {
@@ -23,7 +23,7 @@ stateMachine.subscribe(() => {
 
 const apiKey = /** @type {string} */ (env.API_KEY);
 
-stateMachine.assert(`isInitialized`).actions.send({
+machine.assert(`isInitialized`).actions.send({
   apiKey,
   model: `gpt-4`,
   messages: [{role: `user`, content: `Hello, World!`}],

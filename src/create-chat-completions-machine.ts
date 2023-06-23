@@ -3,7 +3,7 @@ import type {InferSnapshot} from 'state-guard';
 
 import {createChatCompletionsGenerator} from './create-chat-completions-generator.js';
 import {createChatCompletionsStream} from './create-chat-completions-stream.js';
-import {createStateMachine} from 'state-guard';
+import {createMachine} from 'state-guard';
 
 export interface IsSending extends ChatCompletionsRequest {}
 
@@ -23,8 +23,8 @@ export interface IsFailed {
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export function createChatCompletionsStateMachine(options?: {signal?: AbortSignal}) {
-  const stateMachine = createStateMachine({
+export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
+  const machine = createMachine({
     initialState: `isInitialized`,
     initialValue: undefined,
     transformerMap: {
@@ -58,14 +58,14 @@ export function createChatCompletionsStateMachine(options?: {signal?: AbortSigna
     },
   });
 
-  stateMachine.subscribe(async () => {
-    const isSending = stateMachine.get(`isSending`);
+  machine.subscribe(async () => {
+    const isSending = machine.get(`isSending`);
 
     if (!isSending) {
       return;
     }
 
-    let isReceiving: InferSnapshot<typeof stateMachine, 'isReceiving'> | undefined;
+    let isReceiving: InferSnapshot<typeof machine, 'isReceiving'> | undefined;
 
     const abortController = new AbortController();
 
@@ -74,7 +74,7 @@ export function createChatCompletionsStateMachine(options?: {signal?: AbortSigna
         signal: abortController.signal,
       });
 
-      if (stateMachine.get() !== isSending) {
+      if (machine.get() !== isSending) {
         abortController.abort();
 
         return;
@@ -85,7 +85,7 @@ export function createChatCompletionsStateMachine(options?: {signal?: AbortSigna
       isReceiving = isSending.actions.receive({content, contentDelta: ``});
 
       for await (const chatCompletion of createChatCompletionsGenerator(stream.getReader())) {
-        if (stateMachine.get() !== isReceiving) {
+        if (machine.get() !== isReceiving) {
           abortController.abort();
 
           return;
@@ -102,13 +102,13 @@ export function createChatCompletionsStateMachine(options?: {signal?: AbortSigna
         }
       }
 
-      if (stateMachine.get() === isReceiving) {
+      if (machine.get() === isReceiving) {
         throw new Error(`Unexpected termination of chat completions stream.`);
       }
     } catch (error: unknown) {
       abortController.abort();
 
-      const snapshot = stateMachine.get();
+      const snapshot = machine.get();
 
       if (snapshot === isSending) {
         isSending.actions.fail({error});
@@ -118,5 +118,5 @@ export function createChatCompletionsStateMachine(options?: {signal?: AbortSigna
     }
   }, options);
 
-  return stateMachine;
+  return machine;
 }

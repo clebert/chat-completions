@@ -20,13 +20,13 @@ The following example demonstrates how to create and use a state machine to inte
 Chat Completions API in a Node.js environment:
 
 ```js
-import {createChatCompletionsStateMachine} from 'chat-completions';
+import {createChatCompletionsMachine} from 'chat-completions';
 import {env, stderr, stdout} from 'node:process';
 
-const stateMachine = createChatCompletionsStateMachine();
+const machine = createChatCompletionsMachine();
 
-stateMachine.subscribe(() => {
-  const snapshot = stateMachine.get();
+machine.subscribe(() => {
+  const snapshot = machine.get();
 
   switch (snapshot.state) {
     case `isReceiving`: {
@@ -45,7 +45,7 @@ stateMachine.subscribe(() => {
 
 const apiKey = /** @type {string} */ (env.API_KEY);
 
-stateMachine.assert(`isInitialized`).actions.send({
+machine.assert(`isInitialized`).actions.send({
   apiKey,
   model: `gpt-4`,
   messages: [{role: `user`, content: `Hello, World!`}],
@@ -55,7 +55,7 @@ stateMachine.assert(`isInitialized`).actions.send({
 ## StateGuard State Machine Definition
 
 ```ts
-createStateMachine({
+createMachine({
   initialState: `isInitialized`,
   initialValue: undefined,
   transformerMap: {
