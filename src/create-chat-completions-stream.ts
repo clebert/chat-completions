@@ -10,7 +10,13 @@ export interface ChatCompletionsRequestBody {
   readonly functions?: readonly ChatCompletionsFunction[];
   readonly function_call?: 'auto' | 'none' | {readonly name: string};
   readonly temperature?: number;
+  readonly top_p?: number;
+  readonly n?: number;
+  readonly stop?: string | readonly string[];
   readonly max_tokens?: number;
+  readonly presence_penalty?: number;
+  readonly frequency_penalty?: number;
+  readonly logit_bias?: object;
   readonly user?: string;
 }
 
