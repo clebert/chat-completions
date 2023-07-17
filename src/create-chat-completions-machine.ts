@@ -16,7 +16,7 @@ export interface IsReceiving {
 }
 
 export interface IsFinished {
-  readonly reason: 'function_call' | 'length' | 'stop';
+  readonly reason: 'content_filter' | 'function_call' | 'length' | 'stop';
   readonly content: string;
 }
 
@@ -27,7 +27,7 @@ export interface IsReceivingFunctionCall {
 }
 
 export interface IsFunctionCallFinished {
-  readonly reason: 'function_call' | 'length' | 'stop';
+  readonly reason: 'content_filter' | 'function_call' | 'length' | 'stop';
   readonly functionName: string;
   readonly functionArgs: string;
 }

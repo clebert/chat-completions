@@ -14,7 +14,11 @@ const dataSchema = z.object({
       .or(
         z.object({
           delta: z.object({}),
-          finish_reason: z.literal(`stop`).or(z.literal(`length`)).or(z.literal(`function_call`)),
+          finish_reason: z
+            .literal(`content_filter`)
+            .or(z.literal(`function_call`))
+            .or(z.literal(`length`))
+            .or(z.literal(`stop`)),
           index: z.literal(0),
         }),
       )

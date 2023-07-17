@@ -1,0 +1,2 @@
+data: {"id":"chatcmpl-7dOWwvXeh6xXL0Zn9kvoYdgQ4CEtA","object":"chat.completion.chunk","created":1689623442,"model":"gpt-4-0613","choices":[{"index":0,"delta":{"content":" Fear"},"finish_reason":null}]}
+
