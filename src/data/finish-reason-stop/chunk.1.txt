@@ -1,0 +1,2 @@
+data: {"id":"chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg","object":"chat.completion.chunk","created":1689277476,"model":"gpt-4-0613","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}
+

@@ -47,79 +47,9 @@ const apiKey = /** @type {string} */ (env.API_KEY);
 
 machine.assert(`isInitialized`).actions.send({
   apiKey,
-  model: `gpt-4`,
-  messages: [{role: `user`, content: `Hello, World!`}],
-});
-```
-
-## StateGuard State Machine Definition
-
-```ts
-createMachine({
-  initialState: `isInitialized`,
-  initialValue: undefined,
-  transformerMap: {
-    isInitialized: () => undefined,
-    isSending: (value: IsSending) => value,
-    isReceiving: (value: IsReceiving) => value,
-    isFinished: (value: IsFinished) => value,
-    isFailed: (value: IsFailed) => value,
-  },
-  transitionsMap: {
-    isInitialized: {
-      send: `isSending`,
-    },
-    isSending: {
-      initialize: `isInitialized`,
-      receive: `isReceiving`,
-      fail: `isFailed`,
-    },
-    isReceiving: {
-      initialize: `isInitialized`,
-      receive: `isReceiving`,
-      finish: `isFinished`,
-      fail: `isFailed`,
-    },
-    isFinished: {
-      initialize: `isInitialized`,
-    },
-    isFailed: {
-      initialize: `isInitialized`,
-    },
+  body: {
+    model: `gpt-4`,
+    messages: [{role: `user`, content: `Hello, World!`}],
   },
 });
-```
-
-```ts
-interface IsSending {
-  readonly apiKey: string;
-  readonly model: string;
-  readonly messages: readonly [ChatMessage, ...ChatMessage[]];
-}
-
-interface ChatMessage {
-  readonly role: 'assistant' | 'system' | 'user';
-  readonly content: string;
-}
-```
-
-```ts
-interface IsReceiving {
-  readonly content: string;
-  readonly contentDelta: string;
-}
-```
-
-```ts
-interface IsFinished {
-  readonly reason: 'content_filter' | 'length' | 'stop';
-  readonly content: string;
-}
-```
-
-```ts
-interface IsFailed {
-  readonly error: unknown;
-  readonly content?: string;
-}
 ```

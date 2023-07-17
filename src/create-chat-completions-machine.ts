@@ -1,11 +1,14 @@
-import type {ChatCompletionsRequest} from './create-chat-completions-stream.js';
+import type {ChatCompletionsRequestBody} from './create-chat-completions-stream.js';
 import type {InferSnapshot} from 'state-guard';
 
 import {createChatCompletionsGenerator} from './create-chat-completions-generator.js';
 import {createChatCompletionsStream} from './create-chat-completions-stream.js';
 import {createMachine} from 'state-guard';
 
-export interface IsSending extends ChatCompletionsRequest {}
+export interface IsSending {
+  readonly apiKey: string;
+  readonly body: ChatCompletionsRequestBody;
+}
 
 export interface IsReceiving {
   readonly content: string;
@@ -13,8 +16,20 @@ export interface IsReceiving {
 }
 
 export interface IsFinished {
-  readonly reason: 'content_filter' | 'length' | 'stop';
+  readonly reason: 'function_call' | 'length' | 'stop';
   readonly content: string;
+}
+
+export interface IsReceivingFunctionCall {
+  readonly functionName: string;
+  readonly functionArgs: string;
+  readonly functionArgsDelta: string;
+}
+
+export interface IsFunctionCallFinished {
+  readonly reason: 'function_call' | 'length' | 'stop';
+  readonly functionName: string;
+  readonly functionArgs: string;
 }
 
 export interface IsFailed {
@@ -32,6 +47,8 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       isSending: (value: IsSending) => value,
       isReceiving: (value: IsReceiving) => value,
       isFinished: (value: IsFinished) => value,
+      isReceivingFunctionCall: (value: IsReceivingFunctionCall) => value,
+      isFunctionCallFinished: (value: IsFunctionCallFinished) => value,
       isFailed: (value: IsFailed) => value,
     },
     transitionsMap: {
@@ -41,6 +58,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       isSending: {
         initialize: `isInitialized`,
         receive: `isReceiving`,
+        receiveFunctionCall: `isReceivingFunctionCall`,
         fail: `isFailed`,
       },
       isReceiving: {
@@ -52,12 +70,23 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       isFinished: {
         initialize: `isInitialized`,
       },
+      isReceivingFunctionCall: {
+        initialize: `isInitialized`,
+        receiveFunctionCall: `isReceivingFunctionCall`,
+        finishFunctionCall: `isFunctionCallFinished`,
+        fail: `isFailed`,
+      },
+      isFunctionCallFinished: {
+        initialize: `isInitialized`,
+        send: `isSending`,
+      },
       isFailed: {
         initialize: `isInitialized`,
       },
     },
   });
 
+  // eslint-disable-next-line complexity
   machine.subscribe(async () => {
     const isSending = machine.get(`isSending`);
 
@@ -67,42 +96,98 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
     let isReceiving: InferSnapshot<typeof machine, 'isReceiving'> | undefined;
 
+    let isReceivingFunctionCall:
+      | InferSnapshot<typeof machine, 'isReceivingFunctionCall'>
+      | undefined;
+
     const abortController = new AbortController();
 
     try {
-      const stream = await createChatCompletionsStream(isSending.value, {
+      const stream = await createChatCompletionsStream({
+        ...isSending.value,
         signal: abortController.signal,
       });
 
-      if (machine.get() !== isSending) {
+      let snapshot = machine.get();
+
+      if (snapshot !== isSending) {
         abortController.abort();
 
         return;
       }
 
-      let content = ``;
+      for await (const {choices} of createChatCompletionsGenerator(stream.getReader())) {
+        const [{delta, finish_reason}] = choices;
 
-      isReceiving = isSending.actions.receive({content, contentDelta: ``});
+        snapshot = machine.get();
 
-      for await (const chatCompletion of createChatCompletionsGenerator(stream.getReader())) {
-        if (machine.get() !== isReceiving) {
+        if (snapshot === isSending) {
+          if (`function_call` in delta) {
+            const {name: functionName, arguments: functionArgsDelta} = delta.function_call;
+
+            if (!functionName) {
+              throw new Error(`Undefined function name.`);
+            }
+
+            isReceivingFunctionCall = snapshot.actions.receiveFunctionCall({
+              functionName,
+              functionArgs: functionArgsDelta,
+              functionArgsDelta,
+            });
+          } else if (`content` in delta) {
+            const {content: contentDelta} = delta;
+
+            isReceiving = snapshot.actions.receive({content: contentDelta, contentDelta});
+          } else {
+            break;
+          }
+        } else if (snapshot === isReceiving) {
+          if (`function_call` in delta) {
+            break;
+          } else if (`content` in delta) {
+            const {content: contentDelta} = delta;
+
+            isReceiving = snapshot.actions.receive({
+              content: snapshot.value.content + contentDelta,
+              contentDelta,
+            });
+          } else if (finish_reason) {
+            snapshot.actions.finish({reason: finish_reason, content: snapshot.value.content});
+          } else {
+            break;
+          }
+        } else if (snapshot === isReceivingFunctionCall) {
+          if (`function_call` in delta) {
+            const {arguments: functionArgsDelta} = delta.function_call;
+
+            isReceivingFunctionCall = snapshot.actions.receiveFunctionCall({
+              functionName: snapshot.value.functionName,
+              functionArgs: snapshot.value.functionArgs + functionArgsDelta,
+              functionArgsDelta,
+            });
+          } else if (finish_reason) {
+            snapshot.actions.finishFunctionCall({
+              reason: finish_reason,
+              functionName: snapshot.value.functionName,
+              functionArgs: snapshot.value.functionArgs,
+            });
+          } else {
+            break;
+          }
+        } else {
           abortController.abort();
 
           return;
         }
-
-        if (`content` in chatCompletion) {
-          const {content: contentDelta} = chatCompletion;
-
-          content += contentDelta;
-
-          isReceiving = isReceiving.actions.receive({content, contentDelta});
-        } else if (`finishReason` in chatCompletion) {
-          isReceiving.actions.finish({reason: chatCompletion.finishReason, content});
-        }
       }
 
-      if (machine.get() === isReceiving) {
+      snapshot = machine.get();
+
+      if (
+        snapshot === isSending ||
+        snapshot === isReceiving ||
+        snapshot === isReceivingFunctionCall
+      ) {
         throw new Error(`Unexpected termination of chat completions stream.`);
       }
     } catch (error: unknown) {
@@ -110,10 +195,10 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
       const snapshot = machine.get();
 
-      if (snapshot === isSending) {
-        isSending.actions.fail({error});
+      if (snapshot === isSending || snapshot === isReceivingFunctionCall) {
+        snapshot.actions.fail({error});
       } else if (snapshot === isReceiving) {
-        isReceiving.actions.fail({error, content: isReceiving.value.content});
+        snapshot.actions.fail({error, content: snapshot.value.content});
       }
     }
   }, options);

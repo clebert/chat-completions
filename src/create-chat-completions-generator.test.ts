@@ -1,21 +1,28 @@
 import {createChatCompletionsGenerator} from './create-chat-completions-generator.js';
 import {describe, expect, it} from '@jest/globals';
+import {readFile, readdir} from 'node:fs/promises';
+import {dirname, join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
-const dataChunks = [
-  `data: {\"id\":\"chatcmpl-xxx\",\"object\":\"chat.completion.chunk\",\"created\":1683559510,\"model\":\"gpt-4-0314\",\"choices\":[{\"delta\":{\"role\":\"assistant\"},\"index\":0,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-xxx\",\"object\":\"chat.completion.chunk\",\"created\":1683559510,\"model\":\"gpt-4-0314\",\"choices\":[{\"delta\":{\"content\":\"As\"},\"index\":0,\"finish_reason\":null}]}\n\n`,
-  `data: {\"id\":\"chatcmpl-xxx\",\"object\":\"chat.completion.chunk\",\"created\":1683559510,\"model\":\"gpt-4-0314\",\"choices\":[{\"delta\":{\"content\":\" an\"},\"index\":0,\"finish_reason\":null}]}\n\n`,
-  `data: {\"id\":\"chatcmpl-xxx\",\"object\":\"chat.completion.chunk\",\"created\":1683559510,\"model\":\"gpt-4-0314\",\"choices\":[{\"delta\":{\"content\":\" expert\"},\"index\":0,\"finish_reason\":null}]}\n\n`,
-  `data: {\"id\":\"chatcmpl-xxx\",\"object\":\"chat.completion.chunk\",\"created\":1683559510,\"model\":\"gpt-4-0314\",\"choices\":[{\"delta\":{\"content\":\" developer\"},\"index\":0,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-xxx\",\"object\":\"chat.completion.chunk\",\"created\":1683559510,\"model\":\"gpt-4-0314\",\"choices\":[{\"delta\":{},\"index\":0,\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n`,
-];
+async function readDataChunks(dataName: string): Promise<readonly string[]> {
+  const chunks: string[] = [];
+  const directoryName = join(dirname(fileURLToPath(import.meta.url)), `data`, dataName);
 
-const errorChunks = [
-  `{\n    \"error\": {\n        \"message\": \"Incorrect API key provided: ***. You can find your API key at https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": \"invalid_api_key\"\n    }\n}\n`,
-];
+  for (const fileName of await readdir(directoryName)) {
+    chunks.push(await readFile(join(directoryName, fileName), {encoding: `utf-8`}));
+  }
+
+  return chunks;
+}
 
 class AsyncReader {
+  static async create(dataName: string): Promise<AsyncReader> {
+    return new AsyncReader(await readDataChunks(dataName));
+  }
+
   readonly #chunks: string[];
 
-  constructor(chunks: readonly string[]) {
+  private constructor(chunks: readonly string[]) {
     this.#chunks = [...chunks];
   }
 
@@ -29,33 +36,330 @@ class AsyncReader {
 }
 
 describe(`createChatCompletionsGenerator()`, () => {
-  it(`yields chat completions`, async () => {
-    const generator = createChatCompletionsGenerator(new AsyncReader(dataChunks));
-
-    expect(await generator.next()).toEqual({done: false, value: {role: `assistant`}});
-    expect(await generator.next()).toEqual({done: false, value: {content: `As`}});
-    expect(await generator.next()).toEqual({done: false, value: {content: ` an`}});
-    expect(await generator.next()).toEqual({done: false, value: {content: ` expert`}});
-    expect(await generator.next()).toEqual({done: false, value: {content: ` developer`}});
-    expect(await generator.next()).toEqual({done: false, value: {finishReason: `length`}});
-    expect(await generator.next()).toEqual({done: true});
-  });
-
-  it(`throws an error`, async () => {
-    const generator = createChatCompletionsGenerator(new AsyncReader(errorChunks));
-
-    await expect(generator.next()).rejects.toThrow(
-      `Incorrect API key provided: ***. You can find your API key at https://platform.openai.com/account/api-keys.`,
+  it(`finishes with reason stop`, async () => {
+    const generator = createChatCompletionsGenerator(
+      await AsyncReader.create(`finish-reason-stop`),
     );
-  });
 
-  it(`ignores read errors`, async () => {
-    const generator = createChatCompletionsGenerator({
-      read() {
-        throw new Error(`oops`);
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ``, role: `assistant`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
       },
     });
 
-    expect(await generator.next()).toEqual({done: true});
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: `Hello`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: `!`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` How`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` can`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` I`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` assist`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` you`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` today`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: `?`}, finish_reason: null, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {}, finish_reason: `stop`, index: 0}],
+        created: 1689277476,
+        id: `chatcmpl-7bwWqn8BMKzELX8RqaE9pB5BtPWjg`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({done: true, value: undefined});
+  });
+
+  it(`finishes with reason length`, async () => {
+    const generator = createChatCompletionsGenerator(
+      await AsyncReader.create(`finish-reason-length`),
+    );
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ``, role: `assistant`}, finish_reason: null, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: `Hello`}, finish_reason: null, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: `!`}, finish_reason: null, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` How`}, finish_reason: null, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` may`}, finish_reason: null, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` I`}, finish_reason: null, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {content: ` assist`}, finish_reason: null, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {}, finish_reason: `length`, index: 0}],
+        created: 1689277780,
+        id: `chatcmpl-7bwbkwJuw7BqJMi17MiAtCZW1XUC0`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({done: true, value: undefined});
+  });
+
+  it(`calls a function`, async () => {
+    const generator = createChatCompletionsGenerator(
+      await AsyncReader.create(`auto-function-call`),
+    );
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [
+          {
+            delta: {
+              content: null,
+              function_call: {arguments: ``, name: `getUserName`},
+              role: `assistant`,
+            },
+            finish_reason: null,
+            index: 0,
+          },
+        ],
+        created: 1689277356,
+        id: `chatcmpl-7bwUuYxYLAMXjRKvVuFEZEysTF96M`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {function_call: {arguments: `{}`}}, finish_reason: null, index: 0}],
+        created: 1689277356,
+        id: `chatcmpl-7bwUuYxYLAMXjRKvVuFEZEysTF96M`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {}, finish_reason: `function_call`, index: 0}],
+        created: 1689277356,
+        id: `chatcmpl-7bwUuYxYLAMXjRKvVuFEZEysTF96M`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({done: true, value: undefined});
+  });
+
+  it(`forces a function call`, async () => {
+    const generator = createChatCompletionsGenerator(
+      await AsyncReader.create(`force-function-call`),
+    );
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [
+          {
+            delta: {
+              content: null,
+              function_call: {arguments: ``, name: `getUserName`},
+              role: `assistant`,
+            },
+            finish_reason: null,
+            index: 0,
+          },
+        ],
+        created: 1689277588,
+        id: `chatcmpl-7bwYexF0c1yldtJVruhdeIwOd0rTL`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {function_call: {arguments: `{}`}}, finish_reason: null, index: 0}],
+        created: 1689277588,
+        id: `chatcmpl-7bwYexF0c1yldtJVruhdeIwOd0rTL`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({
+      done: false,
+      value: {
+        choices: [{delta: {}, finish_reason: `stop`, index: 0}],
+        created: 1689277588,
+        id: `chatcmpl-7bwYexF0c1yldtJVruhdeIwOd0rTL`,
+        model: `gpt-4-0613`,
+        object: `chat.completion.chunk`,
+      },
+    });
+
+    expect(await generator.next()).toEqual({done: true, value: undefined});
   });
 });

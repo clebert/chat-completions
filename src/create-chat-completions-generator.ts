@@ -1,63 +1,59 @@
-export type ChatCompletion =
-  | {readonly role: 'assistant'}
-  | {readonly content: string}
-  | {readonly finishReason: 'content_filter' | 'length' | 'stop'};
+import {z} from 'zod';
 
-type ChoicesObject =
-  | {
-      readonly choices: readonly [
-        {
-          readonly delta: {readonly content: string};
-          readonly finish_reason: null;
-        },
-      ];
-    }
-  | {
-      readonly choices: readonly [
-        {
-          readonly delta: {};
-          readonly finish_reason: 'content_filter' | 'length' | 'stop';
-        },
-      ];
-    };
+const dataSchema = z.object({
+  choices: z.tuple([
+    z
+      .object({
+        delta: z.object({
+          content: z.string(),
+          role: z.literal(`assistant`).optional(),
+        }),
+        finish_reason: z.null(),
+        index: z.literal(0),
+      })
+      .or(
+        z.object({
+          delta: z.object({}),
+          finish_reason: z.literal(`stop`).or(z.literal(`length`)).or(z.literal(`function_call`)),
+          index: z.literal(0),
+        }),
+      )
+      .or(
+        z.object({
+          delta: z.object({
+            content: z.null().optional(),
+            function_call: z.object({
+              arguments: z.string(),
+              name: z.string().optional(),
+            }),
+            role: z.literal(`assistant`).optional(),
+          }),
+          finish_reason: z.null(),
+          index: z.literal(0),
+        }),
+      ),
+  ]),
+  created: z.number().int(),
+  id: z.string(),
+  model: z.string(),
+  object: z.literal(`chat.completion.chunk`),
+});
 
 export async function* createChatCompletionsGenerator(
   reader: Pick<ReadableStreamDefaultReader<Uint8Array>, 'read'>,
-): AsyncGenerator<ChatCompletion> {
+): AsyncGenerator<z.TypeOf<typeof dataSchema>> {
   const decoder = new TextDecoder(`utf-8`);
 
-  let buffer: string | undefined;
+  let buffer = ``;
 
   while (true) {
-    let result;
+    const result = await reader.read();
 
-    try {
-      result = await reader.read();
-
-      if (result.done) {
-        return;
-      }
-    } catch {
+    if (result.done) {
       return;
     }
 
-    const chunk = decoder.decode(result.value, {stream: true});
-
-    if (buffer === undefined) {
-      let errorObject: {readonly error?: {readonly message: string}} | undefined;
-
-      try {
-        errorObject = JSON.parse(chunk);
-      } catch {}
-
-      if (errorObject?.error) {
-        throw new Error(errorObject.error.message);
-      }
-
-      buffer = ``;
-    }
-
-    buffer += chunk;
+    buffer += decoder.decode(result.value);
 
     while (true) {
       const newLineIndex = buffer.indexOf(`\n`);
@@ -68,23 +64,15 @@ export async function* createChatCompletionsGenerator(
 
       const line = buffer.slice(0, newLineIndex);
 
-      buffer = buffer.slice(newLineIndex + 1);
+      if (line.startsWith(`data: `)) {
+        const data = line.slice(6);
 
-      if (line.startsWith(`data:`)) {
-        const data = line.slice(5).trim();
-
-        if (data && data !== `[DONE]`) {
-          const {
-            choices: [choice],
-          }: ChoicesObject = JSON.parse(data);
-
-          if (choice.finish_reason) {
-            yield {finishReason: choice.finish_reason};
-          } else {
-            yield choice.delta;
-          }
+        if (data !== `[DONE]`) {
+          yield dataSchema.parse(JSON.parse(data));
         }
       }
+
+      buffer = buffer.slice(newLineIndex + 1);
     }
   }
 }
