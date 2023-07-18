@@ -10,12 +10,12 @@ export interface IsSending {
   readonly body: ChatCompletionsRequestBody;
 }
 
-export interface IsReceiving {
+export interface IsReceivingContent {
   readonly content: string;
   readonly contentDelta: string;
 }
 
-export interface IsFinished {
+export interface IsContentFinished {
   readonly reason: 'content_filter' | 'function_call' | 'length' | 'stop';
   readonly content: string;
 }
@@ -45,8 +45,8 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
     transformerMap: {
       isInitialized: () => undefined,
       isSending: (value: IsSending) => value,
-      isReceiving: (value: IsReceiving) => value,
-      isFinished: (value: IsFinished) => value,
+      isReceivingContent: (value: IsReceivingContent) => value,
+      isContentFinished: (value: IsContentFinished) => value,
       isReceivingFunctionCall: (value: IsReceivingFunctionCall) => value,
       isFunctionCallFinished: (value: IsFunctionCallFinished) => value,
       isFailed: (value: IsFailed) => value,
@@ -57,17 +57,17 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       },
       isSending: {
         initialize: `isInitialized`,
-        receive: `isReceiving`,
+        receiveContent: `isReceivingContent`,
         receiveFunctionCall: `isReceivingFunctionCall`,
         fail: `isFailed`,
       },
-      isReceiving: {
+      isReceivingContent: {
         initialize: `isInitialized`,
-        receive: `isReceiving`,
-        finish: `isFinished`,
+        receiveContent: `isReceivingContent`,
+        finishContent: `isContentFinished`,
         fail: `isFailed`,
       },
-      isFinished: {
+      isContentFinished: {
         initialize: `isInitialized`,
       },
       isReceivingFunctionCall: {
@@ -94,7 +94,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       return;
     }
 
-    let isReceiving: InferSnapshot<typeof machine, 'isReceiving'> | undefined;
+    let isReceivingContent: InferSnapshot<typeof machine, 'isReceivingContent'> | undefined;
 
     let isReceivingFunctionCall:
       | InferSnapshot<typeof machine, 'isReceivingFunctionCall'>
@@ -137,22 +137,28 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
           } else if (`content` in delta) {
             const {content: contentDelta} = delta;
 
-            isReceiving = snapshot.actions.receive({content: contentDelta, contentDelta});
+            isReceivingContent = snapshot.actions.receiveContent({
+              content: contentDelta,
+              contentDelta,
+            });
           } else {
             break;
           }
-        } else if (snapshot === isReceiving) {
+        } else if (snapshot === isReceivingContent) {
           if (`function_call` in delta) {
             break;
           } else if (`content` in delta) {
             const {content: contentDelta} = delta;
 
-            isReceiving = snapshot.actions.receive({
+            isReceivingContent = snapshot.actions.receiveContent({
               content: snapshot.value.content + contentDelta,
               contentDelta,
             });
           } else if (finish_reason) {
-            snapshot.actions.finish({reason: finish_reason, content: snapshot.value.content});
+            snapshot.actions.finishContent({
+              reason: finish_reason,
+              content: snapshot.value.content,
+            });
           } else {
             break;
           }
@@ -185,7 +191,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
       if (
         snapshot === isSending ||
-        snapshot === isReceiving ||
+        snapshot === isReceivingContent ||
         snapshot === isReceivingFunctionCall
       ) {
         throw new Error(`Unexpected termination of chat completions stream.`);
@@ -197,7 +203,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
       if (snapshot === isSending || snapshot === isReceivingFunctionCall) {
         snapshot.actions.fail({error});
-      } else if (snapshot === isReceiving) {
+      } else if (snapshot === isReceivingContent) {
         snapshot.actions.fail({error, content: snapshot.value.content});
       }
     }

@@ -12,12 +12,12 @@ machine.subscribe(() => {
   const snapshot = machine.get();
 
   switch (snapshot.state) {
-    case `isReceiving`: {
+    case `isReceivingContent`: {
       stdout.write(snapshot.value.contentDelta);
 
       break;
     }
-    case `isFinished`: {
+    case `isContentFinished`: {
       stdout.write(`\n`);
 
       break;
