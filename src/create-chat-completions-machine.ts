@@ -5,7 +5,7 @@ import {createChatCompletionsGenerator} from './create-chat-completions-generato
 import {createChatCompletionsStream} from './create-chat-completions-stream.js';
 import {createMachine} from 'state-guard';
 
-export interface IsSending {
+export interface IsSendingRequest {
   readonly apiKey: string;
   readonly body: ChatCompletionsRequestBody;
 }
@@ -44,7 +44,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
     initialValue: undefined,
     transformerMap: {
       isInitialized: () => undefined,
-      isSending: (value: IsSending) => value,
+      isSendingRequest: (value: IsSendingRequest) => value,
       isReceivingContent: (value: IsReceivingContent) => value,
       isContentFinished: (value: IsContentFinished) => value,
       isReceivingFunctionCall: (value: IsReceivingFunctionCall) => value,
@@ -53,9 +53,9 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
     },
     transitionsMap: {
       isInitialized: {
-        send: `isSending`,
+        sendRequest: `isSendingRequest`,
       },
-      isSending: {
+      isSendingRequest: {
         initialize: `isInitialized`,
         receiveContent: `isReceivingContent`,
         receiveFunctionCall: `isReceivingFunctionCall`,
@@ -78,7 +78,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       },
       isFunctionCallFinished: {
         initialize: `isInitialized`,
-        send: `isSending`,
+        sendRequest: `isSendingRequest`,
       },
       isFailed: {
         initialize: `isInitialized`,
@@ -88,9 +88,9 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
   // eslint-disable-next-line complexity
   machine.subscribe(async () => {
-    const isSending = machine.get(`isSending`);
+    const isSendingRequest = machine.get(`isSendingRequest`);
 
-    if (!isSending) {
+    if (!isSendingRequest) {
       return;
     }
 
@@ -104,13 +104,13 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
     try {
       const stream = await createChatCompletionsStream({
-        ...isSending.value,
+        ...isSendingRequest.value,
         signal: abortController.signal,
       });
 
       let snapshot = machine.get();
 
-      if (snapshot !== isSending) {
+      if (snapshot !== isSendingRequest) {
         abortController.abort();
 
         return;
@@ -121,7 +121,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
         snapshot = machine.get();
 
-        if (snapshot === isSending) {
+        if (snapshot === isSendingRequest) {
           if (`function_call` in delta) {
             const {name: functionName, arguments: functionArgsDelta} = delta.function_call;
 
@@ -190,7 +190,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       snapshot = machine.get();
 
       if (
-        snapshot === isSending ||
+        snapshot === isSendingRequest ||
         snapshot === isReceivingContent ||
         snapshot === isReceivingFunctionCall
       ) {
@@ -201,7 +201,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
 
       const snapshot = machine.get();
 
-      if (snapshot === isSending || snapshot === isReceivingFunctionCall) {
+      if (snapshot === isSendingRequest || snapshot === isReceivingFunctionCall) {
         snapshot.actions.fail({error});
       } else if (snapshot === isReceivingContent) {
         snapshot.actions.fail({error, content: snapshot.value.content});

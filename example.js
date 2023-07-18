@@ -34,7 +34,7 @@ machine.subscribe(() => {
       messages.push({role: `function`, content: `John Doe`, name: functionName});
 
       setTimeout(() => {
-        snapshot.actions.send({apiKey, body: {model: `gpt-4`, messages}});
+        snapshot.actions.sendRequest({apiKey, body: {model: `gpt-4`, messages}});
       });
 
       break;
@@ -45,7 +45,7 @@ machine.subscribe(() => {
   }
 });
 
-machine.assert(`isInitialized`).actions.send({
+machine.assert(`isInitialized`).actions.sendRequest({
   apiKey,
   body: {
     model: `gpt-4`,
