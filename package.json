@@ -1,6 +1,6 @@
 {
   "name": "chat-completions",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "A reactive state machine implementation for OpenAI Chat Completions API.",
   "repository": {
     "type": "git",
