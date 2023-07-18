@@ -79,6 +79,7 @@ export function createChatCompletionsMachine(options?: {signal?: AbortSignal}) {
       isFunctionCallFinished: {
         initialize: `isInitialized`,
         sendRequest: `isSendingRequest`,
+        fail: `isFailed`,
       },
       isFailed: {
         initialize: `isInitialized`,
