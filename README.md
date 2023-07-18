@@ -11,7 +11,7 @@ and simplifies the process of sending and receiving messages from the Chat Compl
 ## Installation
 
 ```sh
-npm install chat-completions state-guard
+npm install chat-completions state-guard zod
 ```
 
 ## Usage Example
@@ -29,11 +29,11 @@ machine.subscribe(() => {
   const snapshot = machine.get();
 
   switch (snapshot.state) {
-    case `isReceiving`: {
+    case `isReceivingContent`: {
       stdout.write(snapshot.value.contentDelta);
       break;
     }
-    case `isFinished`: {
+    case `isContentFinished`: {
       stdout.write(`\n`);
       break;
     }
@@ -45,7 +45,7 @@ machine.subscribe(() => {
 
 const apiKey = /** @type {string} */ (env.API_KEY);
 
-machine.assert(`isInitialized`).actions.send({
+machine.assert(`isInitialized`).actions.sendRequest({
   apiKey,
   body: {
     model: `gpt-4`,
